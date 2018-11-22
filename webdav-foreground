@@ -1,0 +1,66 @@
+#!/bin/bash
+
+# set some defaults
+export WEBDAV_HOME="${WEBDAV_HOME:=/home/webdav}"
+export WEBDAV_PORT="${WEBDAV_PORT:=8080}"
+export WEBDAV_HOST="${WEBDAV_HOST:=0.0.0.0}"
+export WEBDAV_AUTH_USER_FILE="${WEBDAV_AUTH_USER_FILE:=/tmp/.htpasswd}"
+export WEBDAV_USER_NAME="${WEBDAV_USER_NAME:=webdav}"
+
+export WEBDAV_UID="${WEBDAV_UID:=1000}"
+export WEBDAV_GID="${WEBDAV_GID:=100}"
+export WEBDAV_USER="${WEBDAV_USER:=webdav}"
+export WEBDAV_GROUP="${WEBDAV_GROUP:=users}"
+
+
+# check variable
+# TODO: here we generate a new password, but never show it to anyone
+export WEBDAV_TOKEN="${WEBDAV_TOKEN:=$(openssl rand 32 -base64)}"
+if [ -z "${WEBDAV_TOKEN}" ] ; then
+    echo "ERROR: WEBDAV_TOKEN empty."
+    exit 1
+fi
+
+if [ "$(id -u)" == "0" ] ; then
+    # We are running as root, check to drop privileges
+    # check WEBDAV_GID
+    GROUP=$(getent group "${WEBDAV_GID}" | awk -F ':' '{ print $1 }')
+    if [ -z "${GROUP}" ] ; then
+        # create group
+        addgroup -g "${WEBDAV_GID}" -S "${WEBDAV_GROUP}" || exit 2
+    else
+        # use existing group name
+        WEBDAV_GROUP="${GROUP}"
+    fi
+
+    # check user exists
+    USER=$(getent passwd "${WEBDAV_UID}" | awk -F ':' '{print $1}')
+    if [ -z "${USER}" ] ; then
+        # create user
+        adduser -SDH -u "${WEBDAV_UID}" -G "${WEBDAV_GROUP}" "${WEBDAV_USER}" || exit 3
+    else
+        # use existing user
+        WEBDAV_USER="${USER}"
+    fi
+
+fi
+
+
+# we are going to run apache as this webdav user ... adapt permission
+#chown "${WEBDAV_UID}:${WEBDAV_GID}" /usr/local/apache2/logs || exit 4
+
+# generate password file
+echo "${WEBDAV_TOKEN}:$(openssl passwd -apr1 '')" > "${WEBDAV_AUTH_USER_FILE}"
+htpasswd -nb "${WEBDAV_USER_NAME}" "${WEBDAV_TOKEN}" >> "${WEBDAV_AUTH_USER_FILE}"
+# chown "${WEBDAV_UID}:${WEBDAV_GID}" /tmp/user.passwd
+
+#digest=$(echo -n "${WEBDAV_USER_NAME}:DAV:test" | md5sum | awk '{ print $1 }')
+#echo "${WEBDAV_USER_NAME}:DAV:${digest}" > /tmp/user.digest.passwd
+#digest=$(echo -n "${WEBDAV_TOKEN}:DAV:" | md5sum | awk '{ print $1 }')
+#echo "${WEBDAV_TOKEN}:DAV:${digest}" >> /tmp/user.digest.passwd
+
+rm -f /tmp/httpd.pid
+# start apache
+exec httpd -DFOREGROUND
+# exec /usr/local/bin/httpd-foreground
+
