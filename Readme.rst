@@ -30,7 +30,7 @@ These values can be overridden when starting the container.
       The folder to serve. Default value is `/home/webdav`
 
     WEBDAV_HOST
-      The interface to listen on. Default is empty to instruct Apache to listen
+      The interface to listen on. Default is `0.0.0.0` to instruct Apache to listen
       on all interfaces.
 
     WEBDAV_PORT
